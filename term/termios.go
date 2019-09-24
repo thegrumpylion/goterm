@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-
 /*
 Package term implements a subset of the C termios library to interface with Terminals.
 
@@ -27,6 +26,8 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 // IOCTL terminal stuff.
@@ -346,12 +347,14 @@ func OpenPTY() (*PTY, error) {
 		return nil, err
 	}
 
-	// open pty slave
-	pty.Slave, err = os.OpenFile(slaveStr, os.O_RDWR|syscall.O_NOCTTY, 0)
-	if err != nil {
+	// get peer (slave)
+	pfd, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), unix.TIOCGPTPEER, uintptr(os.O_RDWR|syscall.O_NOCTTY))
+	if errno != 0 {
 		master.Close()
-		return nil, err
+		return nil, errno
 	}
+
+	pty.Slave = os.NewFile(pfd, slaveStr)
 
 	return pty, nil
 }
